@@ -7,6 +7,8 @@ app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')
+if not NEWS_API_KEY:
+    raise ValueError("No NEWS_API_KEY set for Flask application")
 NEWS_API_BASE_URL = 'https://newsapi.org/v2/everything'
 
 @app.route('/', methods=['GET', 'POST'])
@@ -61,11 +63,14 @@ def index():
     except ValueError:
         error_message = "Error al decodificar la respuesta JSON de la API."
 
-    sources_response = requests.get('https://newsapi.org/v2/sources', params={'apiKey': NEWS_API_KEY, 'language': current_config['language']})
     available_sources = []
-    if sources_response.status_code == 200:
+    try:
+        sources_response = requests.get('https://newsapi.org/v2/sources', params={'apiKey': NEWS_API_KEY, 'language': current_config['language']})
+        sources_response.raise_for_status()
         sources_data = sources_response.json()
         available_sources = sources_data.get('sources', [])
+    except (requests.exceptions.RequestException, ValueError) as e:
+        print(f"Error fetching news sources: {e}")
 
     return render_template('index.html', articles=articles, config=current_config, error_message=error_message, available_sources=available_sources)
 

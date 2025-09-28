@@ -1,0 +1,14 @@
+# Environment variables
+.env*
+
+# Configuration files
+config.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Vercel
+.vercel/

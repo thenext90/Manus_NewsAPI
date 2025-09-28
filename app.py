@@ -1,78 +1,55 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template
 import requests
 import os
-import json
+
+# --- Detailed Logging for Vercel Diagnosis ---
+print("--- Flask App Script Starting ---")
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
 
+print("Reading environment variable 'NEWS_API_KEY'...")
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')
-if not NEWS_API_KEY:
-    raise ValueError("No NEWS_API_KEY set for Flask application")
+
+if NEWS_API_KEY:
+    # Log a masked version for verification without exposing the full key.
+    masked_key = f"{NEWS_API_KEY[:4]}...{NEWS_API_KEY[-4:]}"
+    print(f"SUCCESS: NEWS_API_KEY loaded. Key starts with '{masked_key}'.")
+else:
+    # This is the most likely cause of the crash. This message will appear in Vercel logs.
+    print("CRITICAL_ERROR: NEWS_API_KEY environment variable not found or is empty.")
+    raise ValueError("CRITICAL: NEWS_API_KEY environment variable is not set.")
+
 NEWS_API_BASE_URL = 'https://newsapi.org/v2/everything'
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/')
 def index():
-    if 'config' not in session:
-        session['config'] = {
-            'category': 'general',
-            'sources': '',
-            'q': '',
-            'language': 'es'
-        }
-
-    if request.method == 'POST':
-        session['config']['category'] = request.form.get('category', 'general')
-        session['config']['sources'] = request.form.get('sources', '')
-        session['config']['q'] = request.form.get('q', '')
-        session['config']['language'] = request.form.get('language', 'es')
-        session.modified = True
-        return redirect(url_for('index'))
-
-    current_config = session['config']
-
+    print("--- index() route handler triggered ---")
     params = {
         'apiKey': NEWS_API_KEY,
-        'language': current_config['language']
+        'q': 'tecnologia',
+        'language': 'es'
     }
-
-    query_parts = []
-    if current_config.get('q'):
-        query_parts.append(current_config['q'])
-    
-    if current_config.get('category') and current_config['category'] != 'general' and not current_config.get('sources'):
-        query_parts.append(current_config['category'])
-
-    if query_parts:
-        params['q'] = ' AND '.join(query_parts)
-    elif not current_config.get('sources'):
-        params['q'] = 'noticias'
-
-    if current_config.get('sources'):
-        params['sources'] = current_config['sources']
 
     articles = []
     error_message = None
+
+    print(f"Making request to News API: {NEWS_API_BASE_URL}")
     try:
         response = requests.get(NEWS_API_BASE_URL, params=params)
+        print(f"API Response Status: {response.status_code}")
         response.raise_for_status()
         data = response.json()
         articles = data.get("articles", [])
+        print(f"API call successful, {len(articles)} articles found.")
     except requests.exceptions.RequestException as e:
-        error_message = f"Error al conectar con la API de noticias: {e}"
+        error_message = f"Error connecting to the News API: {e}"
+        print(f"ERROR during API request: {e}")
     except ValueError:
-        error_message = "Error al decodificar la respuesta JSON de la API."
+        error_message = "Error decoding the JSON response from the API."
+        print("ERROR decoding JSON from API response.")
 
-    available_sources = []
-    try:
-        sources_response = requests.get('https://newsapi.org/v2/sources', params={'apiKey': NEWS_API_KEY, 'language': current_config['language']})
-        sources_response.raise_for_status()
-        sources_data = sources_response.json()
-        available_sources = sources_data.get('sources', [])
-    except (requests.exceptions.RequestException, ValueError) as e:
-        print(f"Error fetching news sources: {e}")
-
-    return render_template('index.html', articles=articles, config=current_config, error_message=error_message, available_sources=available_sources)
+    print("--- Rendering template ---")
+    return render_template('index.html', articles=articles, error_message=error_message)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')

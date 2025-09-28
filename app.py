@@ -4,7 +4,9 @@ import os
 import json
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+app.secret_key = os.getenv('SECRET_KEY')
+if not app.secret_key:
+    raise ValueError("No SECRET_KEY set for Flask application")
 
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')
 if not NEWS_API_KEY:

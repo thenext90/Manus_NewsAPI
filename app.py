@@ -54,22 +54,25 @@ def index():
         params['sources'] = current_config['sources']
 
     articles = []
+    available_sources = []
     error_message = None
     try:
+        # Fetch articles
         response = requests.get(NEWS_API_BASE_URL, params=params)
         response.raise_for_status()
         data = response.json()
         articles = data.get("articles", [])
+
+        # Fetch sources
+        sources_response = requests.get('https://newsapi.org/v2/sources', params={'apiKey': NEWS_API_KEY, 'language': current_config['language']})
+        sources_response.raise_for_status()
+        sources_data = sources_response.json()
+        available_sources = sources_data.get('sources', [])
+
     except requests.exceptions.RequestException as e:
         error_message = f"Error al conectar con la API de noticias: {e}"
     except ValueError:
         error_message = "Error al decodificar la respuesta JSON de la API."
-
-    sources_response = requests.get('https://newsapi.org/v2/sources', params={'apiKey': NEWS_API_KEY, 'language': current_config['language']})
-    available_sources = []
-    if sources_response.status_code == 200:
-        sources_data = sources_response.json()
-        available_sources = sources_data.get('sources', [])
 
     return render_template('index.html', articles=articles, config=current_config, error_message=error_message, available_sources=available_sources)
 

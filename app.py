@@ -3,9 +3,14 @@ import requests
 import os
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("Error: La variable de entorno SECRET_KEY no está configurada. Por favor, configúrela para la sesión de Flask.")
+app.secret_key = SECRET_KEY
 
 NEWS_API_KEY = os.environ.get('NEWS_API_KEY')
+if not NEWS_API_KEY:
+    raise ValueError("Error: La variable de entorno NEWS_API_KEY no está configurada. Por favor, añada su clave de API de noticias.")
 NEWS_API_BASE_URL = 'https://newsapi.org/v2/everything'
 
 default_config = {

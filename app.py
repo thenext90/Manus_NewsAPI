@@ -282,8 +282,64 @@ def health_check():
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
         'api_service': 'APITube.io',
-        'api_key_configured': bool(APITUBE_API_KEY)
+        'api_key_configured': bool(APITUBE_API_KEY),
+        'api_key_length': len(APITUBE_API_KEY) if APITUBE_API_KEY else 0,
+        'api_key_format': 'Valid' if APITUBE_API_KEY and APITUBE_API_KEY.startswith('at_') else 'Invalid',
+        'endpoints_available': [
+            '/',
+            '/api/news',
+            '/api/categories', 
+            '/api/countries',
+            '/health',
+            '/test-api'
+        ]
     })
+
+
+@app.route('/test-api', methods=['GET'])
+def test_api_connection():
+    """
+    Endpoint para probar la conexión con APITube.io
+    """
+    if not APITUBE_API_KEY:
+        return jsonify({
+            'status': 'error',
+            'message': 'APITUBE_API_KEY no está configurada',
+            'solution': 'Configura la variable APITUBE_API_KEY en Vercel'
+        }), 500
+    
+    # Configurar headers de prueba
+    headers = {
+        'X-API-Key': APITUBE_API_KEY,
+        'Content-Type': 'application/json'
+    }
+    
+    # Parámetros de prueba mínimos
+    params = {
+        'per_page': 1,
+        'title': 'test'
+    }
+    
+    try:
+        response = requests.get(APITUBE_BASE_URL, params=params, headers=headers, timeout=10)
+        
+        return jsonify({
+            'status': 'success',
+            'api_service': 'APITube.io',
+            'api_url': APITUBE_BASE_URL,
+            'response_status': response.status_code,
+            'api_key_working': response.status_code == 200,
+            'message': 'Conexión exitosa con APITube.io' if response.status_code == 200 else f'Error HTTP {response.status_code}',
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except requests.exceptions.RequestException as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Error de conexión: {str(e)}',
+            'api_service': 'APITube.io',
+            'timestamp': datetime.now().isoformat()
+        }), 500
 
 
 # Para desarrollo local

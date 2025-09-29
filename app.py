@@ -43,20 +43,21 @@ def fetch_news(query=None, country=None, language='es', category=None, page_size
         'Content-Type': 'application/json'
     }
     
-    # Parámetros base
+    # Parámetros base - más conservadores
     params = {
-        'limit': page_size,
-        'sortBy': 'publishedAt',
-        'order': 'desc'
+        'limit': min(page_size, 50)  # Limitar para evitar problemas
     }
     
-    # Configurar idioma
+    # Configurar idioma - múltiples variaciones
     if language:
         params['language'] = language
+        # Algunos APIs usan 'lang' en lugar de 'language'
+        # params['lang'] = language
     
     # Configurar país
     if country and country.strip():
-        params['country'] = country.strip()
+        country_code = country.strip().upper()
+        params['country'] = country_code
     
     # Configurar categoría
     if category and category != 'general':
@@ -64,10 +65,14 @@ def fetch_news(query=None, country=None, language='es', category=None, page_size
     
     # Configurar búsqueda de texto
     if query and query.strip():
-        params['q'] = query.strip()
-    elif not query and category == 'general':
-        # Búsqueda por defecto para contenido general relevante
-        params['q'] = 'noticias'
+        # Probar diferentes parámetros de búsqueda
+        search_term = query.strip()
+        params['q'] = search_term
+        # Logging para debug
+        logger.info(f"Buscando: '{search_term}' en idioma '{language}'")
+    elif not query and category == 'general' and language:
+        # Solo filtrar por idioma sin búsqueda específica
+        logger.info(f"Obteniendo noticias generales en idioma '{language}'")
     
     try:
         response = requests.get(APITUBE_BASE_URL, params=params, headers=headers, timeout=15)

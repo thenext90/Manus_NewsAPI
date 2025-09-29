@@ -72,21 +72,20 @@ def fetch_news(query=None, country=None, language='es', category=None, page_size
         logger.info(f"Buscando: '{search_term}' en idioma '{language}'")
     elif not query and category == 'general' and language:
         # Solo filtrar por idioma sin búsqueda específica
-        logger.info(f"Obteniendo noticias generales en idioma '{language}'")
+        logger.info(f"Obteniendo noticias generales en idioma '{language}'")    
     
     try:
         response = requests.get(APITUBE_BASE_URL, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
         
-        if not data.get('success', True):
+        if not data.get('status', True):
             error_msg = data.get('message', 'Error desconocido de la API')
             logger.error(f"Error de API: {error_msg}")
             return [], f"Error de la API de APITube.io: {error_msg}"
         
-        articles = data.get('data', [])
-        
-        # Procesar y filtrar artículos
+        # APITube.io usa 'results' NO 'data'
+        articles = data.get('results', [])        # Procesar y filtrar artículos
         processed_articles = []
         for article in articles:
             if article.get('title') and article.get('title').strip():
@@ -289,7 +288,7 @@ def health_check():
         'api_service': 'APITube.io',
         'api_key_configured': bool(APITUBE_API_KEY),
         'api_key_length': len(APITUBE_API_KEY) if APITUBE_API_KEY else 0,
-        'api_key_format': 'Valid' if APITUBE_API_KEY and APITUBE_API_KEY.startswith('at_') else 'Invalid',
+        'api_key_format': 'Valid' if APITUBE_API_KEY and len(APITUBE_API_KEY) > 20 else 'Invalid',
         'endpoints_available': [
             '/',
             '/api/news',
@@ -366,9 +365,7 @@ def debug_search():
     # Parámetros de prueba
     params = {
         'q': query,
-        'limit': 5,
-        'sortBy': 'publishedAt',
-        'order': 'desc'
+        'limit': 5
     }
     
     if language:
@@ -396,13 +393,13 @@ def debug_search():
         if response.status_code == 200:
             data = response.json()
             debug_info['response_keys'] = list(data.keys()) if isinstance(data, dict) else 'not_dict'
-            debug_info['articles_count'] = len(data.get('data', []))
-            debug_info['success'] = data.get('success', False)
+            debug_info['articles_count'] = len(data.get('results', []))
+            debug_info['success'] = data.get('status', False)
             debug_info['message'] = data.get('message', '')
             
-            if data.get('data') and len(data['data']) > 0:
-                debug_info['first_article_keys'] = list(data['data'][0].keys())
-                debug_info['first_article_title'] = data['data'][0].get('title', 'No title')
+            if data.get('results') and len(data['results']) > 0:
+                debug_info['first_article_keys'] = list(data['results'][0].keys())
+                debug_info['first_article_title'] = data['results'][0].get('title', 'No title')
         else:
             debug_info['error_response'] = response.text
             

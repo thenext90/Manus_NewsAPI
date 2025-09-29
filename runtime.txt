@@ -1,0 +1,2 @@
+# Configuración de runtime para Vercel
+python-3.11

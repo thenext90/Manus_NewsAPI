@@ -45,18 +45,18 @@ def fetch_news(query=None, country=None, language='es', category=None, page_size
     
     # Parámetros base
     params = {
-        'per_page': page_size,
-        'sort_by': 'published_at',
+        'limit': page_size,
+        'sortBy': 'publishedAt',
         'order': 'desc'
     }
     
     # Configurar idioma
     if language:
-        params['language.code'] = language
+        params['language'] = language
     
     # Configurar país
     if country and country.strip():
-        params['country.code'] = country.strip()
+        params['country'] = country.strip()
     
     # Configurar categoría
     if category and category != 'general':
@@ -64,10 +64,10 @@ def fetch_news(query=None, country=None, language='es', category=None, page_size
     
     # Configurar búsqueda de texto
     if query and query.strip():
-        params['title'] = query.strip()
+        params['q'] = query.strip()
     elif not query and category == 'general':
         # Búsqueda por defecto para contenido general relevante
-        params['title'] = 'noticias OR actualidad OR información'
+        params['q'] = 'noticias'
     
     try:
         response = requests.get(APITUBE_BASE_URL, params=params, headers=headers, timeout=15)
@@ -316,8 +316,8 @@ def test_api_connection():
     
     # Parámetros de prueba mínimos
     params = {
-        'per_page': 1,
-        'title': 'test'
+        'limit': 1,
+        'q': 'test'
     }
     
     try:
@@ -340,6 +340,75 @@ def test_api_connection():
             'api_service': 'APITube.io',
             'timestamp': datetime.now().isoformat()
         }), 500
+
+
+@app.route('/debug-search')
+def debug_search():
+    """
+    Endpoint para depurar búsquedas
+    """
+    query = request.args.get('q', 'España')
+    country = request.args.get('country', '')
+    language = request.args.get('language', 'es')
+    category = request.args.get('category', 'general')
+    
+    # Configurar headers de autenticación
+    headers = {
+        'X-API-Key': APITUBE_API_KEY,
+        'Content-Type': 'application/json'
+    }
+    
+    # Parámetros de prueba
+    params = {
+        'q': query,
+        'limit': 5,
+        'sortBy': 'publishedAt',
+        'order': 'desc'
+    }
+    
+    if language:
+        params['language'] = language
+    if country:
+        params['country'] = country
+    if category != 'general':
+        params['category'] = category
+    
+    try:
+        logger.info(f"Probando URL: {APITUBE_BASE_URL}")
+        logger.info(f"Con parámetros: {params}")
+        
+        response = requests.get(APITUBE_BASE_URL, params=params, headers=headers, timeout=15)
+        
+        debug_info = {
+            'url': response.url,
+            'status_code': response.status_code,
+            'headers': dict(response.headers),
+            'params_sent': params,
+            'has_api_key': bool(APITUBE_API_KEY),
+            'api_key_length': len(APITUBE_API_KEY) if APITUBE_API_KEY else 0,
+        }
+        
+        if response.status_code == 200:
+            data = response.json()
+            debug_info['response_keys'] = list(data.keys()) if isinstance(data, dict) else 'not_dict'
+            debug_info['articles_count'] = len(data.get('data', []))
+            debug_info['success'] = data.get('success', False)
+            debug_info['message'] = data.get('message', '')
+            
+            if data.get('data') and len(data['data']) > 0:
+                debug_info['first_article_keys'] = list(data['data'][0].keys())
+                debug_info['first_article_title'] = data['data'][0].get('title', 'No title')
+        else:
+            debug_info['error_response'] = response.text
+            
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'has_api_key': bool(APITUBE_API_KEY),
+            'url': APITUBE_BASE_URL
+        })
 
 
 # Para desarrollo local

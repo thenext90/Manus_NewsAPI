@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script de verificación para el Buscador de Noticias
+Script de verificación para el APITube.io News Explorer
 Verifica que todo esté listo para el deploy en Vercel
 """
 
@@ -17,7 +17,8 @@ def check_files():
         'requirements.txt',
         'vercel.json',
         'templates/index.html',
-        'README.md'
+        'README.md',
+        'runtime.txt'
     ]
     
     missing_files = []
@@ -48,17 +49,21 @@ def check_syntax():
         return False
 
 def check_env_vars():
-    """Verifica las variables de entorno"""
+    """Verifica las variables de entorno para APITube.io"""
     print("\n🔐 Verificando configuración de variables de entorno...")
     
     # Para desarrollo local
-    news_api_key = os.environ.get('NEWS_API_KEY')
+    apitube_api_key = os.environ.get('APITUBE_API_KEY')
     secret_key = os.environ.get('SECRET_KEY')
     
-    if news_api_key:
-        print(f"  ✅ NEWS_API_KEY configurada (longitud: {len(news_api_key)})")
+    if apitube_api_key:
+        print(f"  ✅ APITUBE_API_KEY configurada (longitud: {len(apitube_api_key)})")
+        if apitube_api_key.startswith('at_'):
+            print("  ✅ Formato de clave APITube.io correcto")
+        else:
+            print("  ⚠️  Formato de clave podría ser incorrecto (debe empezar con 'at_')")
     else:
-        print("  ⚠️  NEWS_API_KEY no encontrada localmente (debe estar en Vercel)")
+        print("  ⚠️  APITUBE_API_KEY no encontrada localmente (debe estar en Vercel)")
     
     if secret_key:
         print(f"  ✅ SECRET_KEY configurada (longitud: {len(secret_key)})")
@@ -66,8 +71,16 @@ def check_env_vars():
         print("  ⚠️  SECRET_KEY no encontrada localmente (debe estar en Vercel)")
     
     print("\n📋 Variables de entorno requeridas en Vercel:")
-    print("  • NEWS_API_KEY: Tu clave de API de NewsAPI")
+    print("  • APITUBE_API_KEY: Tu clave de API de APITube.io")
     print("  • SECRET_KEY: Clave secreta para Flask")
+    
+    print("\n🌟 Ventajas de APITube.io:")
+    print("  • 500,000+ fuentes verificadas vs ~80,000 de NewsAPI")
+    print("  • 177 países vs ~54 de otras APIs")
+    print("  • 60+ idiomas vs ~14 de competidores")
+    print("  • 65+ parámetros de filtrado vs ~10 básicos")
+    print("  • Actualizaciones en tiempo real")
+    print("  • IA integrada para análisis de sentimientos")
     
     return True
 
@@ -84,7 +97,7 @@ def check_dependencies():
             if dep.strip():
                 print(f"    • {dep.strip()}")
         
-        print("  ✅ requirements.txt es válido")
+        print("  ✅ requirements.txt es válido para APITube.io")
         return True
     except Exception as e:
         print(f"  ❌ Error al leer requirements.txt: {e}")
@@ -112,30 +125,68 @@ def check_vercel_config():
         print(f"  ❌ Error al leer vercel.json: {e}")
         return False
 
+def check_apitube_integration():
+    """Verifica la integración específica con APITube.io"""
+    print("\n🌐 Verificando integración con APITube.io...")
+    
+    try:
+        with open('app.py', 'r') as f:
+            content = f.read()
+        
+        if 'APITUBE_API_KEY' in content:
+            print("  ✅ Configuración de APITube.io encontrada en app.py")
+        else:
+            print("  ❌ No se encontró configuración de APITube.io")
+            return False
+            
+        if 'api.apitube.io' in content:
+            print("  ✅ URL de APITube.io configurada correctamente")
+        else:
+            print("  ❌ URL de APITube.io no encontrada")
+            return False
+            
+        if 'X-API-Key' in content:
+            print("  ✅ Método de autenticación correcto (X-API-Key header)")
+        else:
+            print("  ⚠️  Método de autenticación podría estar mal configurado")
+        
+        print("  ✅ Integración con APITube.io parece correcta")
+        return True
+        
+    except Exception as e:
+        print(f"  ❌ Error al verificar integración: {e}")
+        return False
+
 def main():
     """Función principal"""
-    print("🔍 VERIFICACIÓN DEL PROYECTO - BUSCADOR DE NOTICIAS")
-    print("=" * 60)
+    print("🌐 VERIFICACIÓN DEL PROYECTO - APITUBE.IO NEWS EXPLORER")
+    print("=" * 65)
     
     checks = [
         check_files(),
         check_syntax(),
         check_dependencies(),
         check_vercel_config(),
+        check_apitube_integration(),
         check_env_vars()
     ]
     
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 65)
     
     if all(checks):
-        print("🎉 ¡PROYECTO LISTO PARA DEPLOY!")
+        print("🎉 ¡PROYECTO LISTO PARA DEPLOY CON APITUBE.IO!")
         print("\n📝 Próximos pasos:")
-        print("1. Asegúrate de que las variables de entorno estén configuradas en Vercel")
-        print("2. Haz push de los cambios a tu repositorio")
-        print("3. Deploy automático en Vercel")
+        print("1. Obtén tu API Key gratis en https://apitube.io/")
+        print("2. Configura APITUBE_API_KEY en las variables de entorno de Vercel")
+        print("3. Configura SECRET_KEY en Vercel")
+        print("4. Haz push de los cambios a tu repositorio")
+        print("5. Deploy automático en Vercel")
         print("\n🌐 URLs importantes:")
-        print("• Dashboard de Vercel: https://vercel.com/dashboard")
-        print("• NewsAPI: https://newsapi.org/")
+        print("• APITube.io: https://apitube.io/")
+        print("• Documentación: https://docs.apitube.io/")
+        print("• Dashboard Vercel: https://vercel.com/dashboard")
+        print("• Query Builder: https://docs.apitube.io/platform/news-api/query-builder")
+        print("\n🚀 ¡Experimenta el poder de 500,000+ fuentes de noticias!")
         return 0
     else:
         print("❌ HAY PROBLEMAS QUE RESOLVER")

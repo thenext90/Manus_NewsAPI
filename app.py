@@ -14,86 +14,99 @@ app = Flask(__name__)
 SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-secret-key-for-development')
 app.secret_key = SECRET_KEY
 
-NEWS_API_KEY = os.environ.get('NEWS_API_KEY')
-NEWS_API_BASE_URL = 'https://newsapi.org/v2/everything'
-SOURCES_API_URL = 'https://newsapi.org/v2/sources'
+# Configuración para APITube.io
+APITUBE_API_KEY = os.environ.get('APITUBE_API_KEY')
+APITUBE_BASE_URL = 'https://api.apitube.io/v1/news/everything'
+APITUBE_CATEGORIES_URL = 'https://api.apitube.io/v1/news/category'
+APITUBE_TOP_HEADLINES_URL = 'https://api.apitube.io/v1/news/top-headlines'
 
 # Configuración por defecto
 default_config = {
     'category': 'general',
-    'sources': '',
+    'country': '',
     'q': '',
     'language': 'es',
-    'sortBy': 'publishedAt'
+    'sortBy': 'published_at'
 }
 
-def fetch_news(query=None, sources=None, language='es', category=None, page_size=20):
+def fetch_news(query=None, country=None, language='es', category=None, page_size=20):
     """
-    Función para obtener noticias de la API
+    Función para obtener noticias de APITube.io
     """
-    if not NEWS_API_KEY:
-        logger.error("NEWS_API_KEY no está configurada")
-        return [], "La clave de API de noticias no está configurada."
+    if not APITUBE_API_KEY:
+        logger.error("APITUBE_API_KEY no está configurada")
+        return [], "La clave de API de APITube.io no está configurada."
     
-    params = {
-        'apiKey': NEWS_API_KEY,
-        'language': language,
-        'pageSize': page_size,
-        'sortBy': 'publishedAt'
+    # Configurar headers de autenticación
+    headers = {
+        'X-API-Key': APITUBE_API_KEY,
+        'Content-Type': 'application/json'
     }
     
-    # Construir la query de búsqueda
-    query_parts = []
+    # Parámetros base
+    params = {
+        'per_page': page_size,
+        'sort_by': 'published_at',
+        'order': 'desc'
+    }
     
+    # Configurar idioma
+    if language:
+        params['language.code'] = language
+    
+    # Configurar país
+    if country and country.strip():
+        params['country.code'] = country.strip()
+    
+    # Configurar categoría
+    if category and category != 'general':
+        params['category'] = category
+    
+    # Configurar búsqueda de texto
     if query and query.strip():
-        query_parts.append(query.strip())
-    
-    if category and category != 'general' and not sources:
-        query_parts.append(category)
-    
-    # Si hay query específica, usarla; si no, usar una query por defecto
-    if query_parts:
-        params['q'] = ' AND '.join(query_parts)
-    elif not sources:
-        params['q'] = 'noticias OR actualidad OR informacion'
-    
-    # Agregar fuentes si están especificadas
-    if sources and sources.strip():
-        params['sources'] = sources.strip()
+        params['title'] = query.strip()
+    elif not query and category == 'general':
+        # Búsqueda por defecto para contenido general relevante
+        params['title'] = 'noticias OR actualidad OR información'
     
     try:
-        response = requests.get(NEWS_API_BASE_URL, params=params, timeout=10)
+        response = requests.get(APITUBE_BASE_URL, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
         
-        if data.get('status') != 'ok':
+        if not data.get('success', True):
             error_msg = data.get('message', 'Error desconocido de la API')
             logger.error(f"Error de API: {error_msg}")
-            return [], f"Error de la API de noticias: {error_msg}"
+            return [], f"Error de la API de APITube.io: {error_msg}"
         
-        articles = data.get('articles', [])
+        articles = data.get('data', [])
         
-        # Filtrar artículos sin título o descripción
-        filtered_articles = []
+        # Procesar y filtrar artículos
+        processed_articles = []
         for article in articles:
-            if article.get('title') and article.get('title') != '[Removed]':
-                # Formatear fecha
-                if article.get('publishedAt'):
-                    try:
-                        date_obj = datetime.fromisoformat(article['publishedAt'].replace('Z', '+00:00'))
-                        article['publishedAt'] = date_obj.strftime('%d/%m/%Y %H:%M')
-                    except:
-                        pass
-                filtered_articles.append(article)
+            if article.get('title') and article.get('title').strip():
+                # Formatear datos para compatibilidad con el template
+                processed_article = {
+                    'title': article.get('title', ''),
+                    'description': article.get('description', ''),
+                    'url': article.get('href', ''),
+                    'publishedAt': format_date(article.get('published_at')),
+                    'source': {
+                        'name': article.get('source', {}).get('name', 'Fuente desconocida')
+                    },
+                    'urlToImage': article.get('image', ''),
+                    'content': article.get('body', '')[:200] + '...' if article.get('body') else None
+                }
+                processed_articles.append(processed_article)
         
-        return filtered_articles, None
+        return processed_articles, None
         
     except requests.exceptions.Timeout:
-        error_msg = "Timeout al conectar con la API de noticias"
+        error_msg = "Timeout al conectar con la API de APITube.io"
         logger.error(error_msg)
         return [], error_msg
     except requests.exceptions.RequestException as e:
-        error_msg = f"Error al conectar con la API de noticias: {str(e)}"
+        error_msg = f"Error al conectar con la API de APITube.io: {str(e)}"
         logger.error(error_msg)
         return [], error_msg
     except Exception as e:
@@ -102,31 +115,74 @@ def fetch_news(query=None, sources=None, language='es', category=None, page_size
         return [], error_msg
 
 
-def fetch_sources(language='es'):
+def fetch_categories():
     """
-    Función para obtener las fuentes disponibles
+    Función para obtener las categorías disponibles de APITube.io
     """
-    if not NEWS_API_KEY:
+    if not APITUBE_API_KEY:
         return []
     
+    # Categorías disponibles en APITube.io según su documentación
+    categories = [
+        {'id': 'general', 'name': 'General'},
+        {'id': 'business', 'name': 'Negocios'},
+        {'id': 'entertainment', 'name': 'Entretenimiento'},
+        {'id': 'health', 'name': 'Salud'},
+        {'id': 'science', 'name': 'Ciencia'},
+        {'id': 'sports', 'name': 'Deportes'},
+        {'id': 'technology', 'name': 'Tecnología'},
+        {'id': 'politics', 'name': 'Política'},
+        {'id': 'finance', 'name': 'Finanzas'},
+        {'id': 'education', 'name': 'Educación'},
+        {'id': 'travel', 'name': 'Viajes'},
+        {'id': 'food', 'name': 'Comida'},
+        {'id': 'lifestyle', 'name': 'Estilo de vida'}
+    ]
+    
+    return categories
+
+
+def get_countries():
+    """
+    Lista de países disponibles para filtrar noticias
+    """
+    countries = [
+        {'code': '', 'name': 'Todos los países'},
+        {'code': 'es', 'name': 'España'},
+        {'code': 'mx', 'name': 'México'},
+        {'code': 'ar', 'name': 'Argentina'},
+        {'code': 'co', 'name': 'Colombia'},
+        {'code': 'pe', 'name': 'Perú'},
+        {'code': 'cl', 'name': 'Chile'},
+        {'code': 'us', 'name': 'Estados Unidos'},
+        {'code': 'gb', 'name': 'Reino Unido'},
+        {'code': 'fr', 'name': 'Francia'},
+        {'code': 'de', 'name': 'Alemania'},
+        {'code': 'it', 'name': 'Italia'},
+        {'code': 'br', 'name': 'Brasil'},
+        {'code': 'cn', 'name': 'China'},
+        {'code': 'jp', 'name': 'Japón'},
+        {'code': 'in', 'name': 'India'}
+    ]
+    return countries
+
+
+def format_date(date_string):
+    """
+    Formatea la fecha de APITube.io al formato deseado
+    """
+    if not date_string:
+        return 'Fecha no disponible'
+    
     try:
-        params = {
-            'apiKey': NEWS_API_KEY,
-            'language': language
-        }
-        response = requests.get(SOURCES_API_URL, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+        # APITube.io usa formato ISO 8601
+        if date_string.endswith('Z'):
+            date_string = date_string[:-1] + '+00:00'
         
-        if data.get('status') == 'ok':
-            return data.get('sources', [])
-        else:
-            logger.error(f"Error al obtener fuentes: {data.get('message', 'Error desconocido')}")
-            return []
-            
-    except Exception as e:
-        logger.error(f"Error al obtener fuentes: {str(e)}")
-        return []
+        date_obj = datetime.fromisoformat(date_string)
+        return date_obj.strftime('%d/%m/%Y %H:%M')
+    except Exception:
+        return date_string
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -134,75 +190,86 @@ def index():
     # Configuración por defecto
     config = default_config.copy()
     articles = []
-    available_sources = []
+    categories = fetch_categories()
+    countries = get_countries()
     error_message = None
     
     if request.method == 'POST':
         # Obtener parámetros del formulario
         config['category'] = request.form.get('category', default_config['category'])
-        config['sources'] = request.form.get('sources', default_config['sources'])
+        config['country'] = request.form.get('country', default_config['country'])
         config['q'] = request.form.get('q', default_config['q'])
         config['language'] = request.form.get('language', default_config['language'])
     else:
         # Para GET, usar parámetros de URL si están presentes
         config['category'] = request.args.get('category', default_config['category'])
-        config['sources'] = request.args.get('sources', default_config['sources'])
+        config['country'] = request.args.get('country', default_config['country'])
         config['q'] = request.args.get('q', default_config['q'])
         config['language'] = request.args.get('language', default_config['language'])
     
-    # Obtener noticias
+    # Obtener noticias usando APITube.io
     articles, error_message = fetch_news(
         query=config['q'],
-        sources=config['sources'],
+        country=config['country'],
         language=config['language'],
         category=config['category']
     )
-    
-    # Obtener fuentes disponibles
-    available_sources = fetch_sources(config['language'])
     
     return render_template(
         'index.html', 
         articles=articles, 
         config=config, 
         error_message=error_message, 
-        available_sources=available_sources
+        categories=categories,
+        countries=countries
     )
 
 
 @app.route('/api/news', methods=['GET'])
 def api_news():
     """
-    Endpoint de API para obtener noticias en formato JSON
+    Endpoint de API para obtener noticias en formato JSON usando APITube.io
     """
     query = request.args.get('q', '')
-    sources = request.args.get('sources', '')
+    country = request.args.get('country', '')
     language = request.args.get('language', 'es')
     category = request.args.get('category', 'general')
     
-    articles, error_message = fetch_news(query, sources, language, category)
+    articles, error_message = fetch_news(query, country, language, category)
     
     if error_message:
         return jsonify({'error': error_message}), 500
     
     return jsonify({
-        'status': 'ok',
+        'status': 'success',
         'totalResults': len(articles),
         'articles': articles
     })
 
 
-@app.route('/api/sources', methods=['GET'])
-def api_sources():
+@app.route('/api/categories', methods=['GET'])
+def api_categories():
     """
-    Endpoint de API para obtener fuentes disponibles
+    Endpoint de API para obtener categorías disponibles
     """
-    language = request.args.get('language', 'es')
-    sources = fetch_sources(language)
+    categories = fetch_categories()
     
     return jsonify({
-        'status': 'ok',
-        'sources': sources
+        'status': 'success',
+        'categories': categories
+    })
+
+
+@app.route('/api/countries', methods=['GET'])
+def api_countries():
+    """
+    Endpoint de API para obtener países disponibles
+    """
+    countries = get_countries()
+    
+    return jsonify({
+        'status': 'success',
+        'countries': countries
     })
 
 
@@ -214,7 +281,8 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
-        'api_key_configured': bool(NEWS_API_KEY)
+        'api_service': 'APITube.io',
+        'api_key_configured': bool(APITUBE_API_KEY)
     })
 
 
